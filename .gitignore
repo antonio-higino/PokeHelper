@@ -1,0 +1,55 @@
+# Gradle
+.gradle/
+**/build/
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# Kotlin / Java
+*.class
+*.log
+hs_err_pid*
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local environment / toolchain
+.mise/
+.env
+.env.*
+local.properties
+
+# Test / coverage outputs
+out/
+target/
+coverage/
+*.exec
+
+# Archives
+*.jar
+*.war
+*.ear
+*.zip
+*.tar
+*.gz
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Gradle wrapper local caches from runs
+**/tmp/
+
+# Ktor / app runtime
+logs/
+*.pid

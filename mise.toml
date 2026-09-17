@@ -1,0 +1,10 @@
+[tools]
+java = "21"
+
+[tasks.build]
+description = "Compila o projeto Kotlin e gera o artefato (JAR)"
+run = "gradlew.bat build -x test"
+
+[tasks.test]
+description = "Executa a suíte de testes automatizados"
+run = "gradlew.bat test"
