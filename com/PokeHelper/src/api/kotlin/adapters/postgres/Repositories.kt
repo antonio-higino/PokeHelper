@@ -6,11 +6,14 @@ import com.example.domain.User
 import com.example.domain.UserRepository
 import com.example.domain.Page
 import com.example.domain.UsernameAlreadyExists
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.ObjectMapper
 import kotlinx.coroutines.Dispatchers
 import org.jetbrains.exposed.dao.id.LongIdTable
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
@@ -27,7 +30,10 @@ internal object UsersTable : LongIdTable("users") {
 internal object TeamsTable : LongIdTable("teams") {
     val name = varchar("name", 255)
     val userId = long("user_id")
+    val pokemons = text("pokemons")
 }
+
+private val json = ObjectMapper()
 
 private fun ResultRow.toUser() = User(
     id = this[UsersTable.id].value,
@@ -38,7 +44,8 @@ private fun ResultRow.toUser() = User(
 private fun ResultRow.toTeam() = Team(
     id = this[TeamsTable.id].value,
     name = this[TeamsTable.name],
-    userId = this[TeamsTable.userId]
+    userId = this[TeamsTable.userId],
+    pokemons = json.readTree(this[TeamsTable.pokemons]).toList()
 )
 
 class ExposedUserRepository(private val database: Database) : UserRepository {
@@ -99,6 +106,27 @@ class ExposedUserRepository(private val database: Database) : UserRepository {
 }
 
 class ExposedTeamRepository(private val database: Database) : TeamRepository {
+    override suspend fun list(page: Int, size: Int, name: String?, userId: Long?): Page<Team> =
+        newSuspendedTransaction(Dispatchers.IO, db = database) {
+            fun query() = TeamsTable.selectAll().also { teams ->
+                when {
+                    name != null && userId != null -> teams.where {
+                        (TeamsTable.name eq name) and (TeamsTable.userId eq userId)
+                    }
+                    name != null -> teams.where { TeamsTable.name eq name }
+                    userId != null -> teams.where { TeamsTable.userId eq userId }
+                }
+            }
+
+            val total = query().count()
+            val items = query()
+                .orderBy(TeamsTable.id to SortOrder.ASC)
+                .limit(size)
+                .offset((page.toLong() - 1) * size)
+                .map(ResultRow::toTeam)
+            Page(items, page, size, total)
+        }
+
     override suspend fun findById(id: Long): Team? = newSuspendedTransaction(Dispatchers.IO, db = database) {
         TeamsTable.selectAll()
             .where { TeamsTable.id eq id }
@@ -112,18 +140,21 @@ class ExposedTeamRepository(private val database: Database) : TeamRepository {
             .map(ResultRow::toTeam)
     }
 
-    override suspend fun create(name: String, userId: Long): Team = newSuspendedTransaction(Dispatchers.IO, db = database) {
+    override suspend fun create(name: String, userId: Long, pokemons: List<JsonNode>): Team = newSuspendedTransaction(Dispatchers.IO, db = database) {
+        val serializedPokemons = json.writeValueAsString(pokemons)
         val id = TeamsTable.insertAndGetId {
             it[TeamsTable.name] = name
             it[TeamsTable.userId] = userId
+            it[TeamsTable.pokemons] = serializedPokemons
         }.value
-        Team(id = id, name = name, userId = userId)
+        Team(id = id, name = name, userId = userId, pokemons = pokemons)
     }
 
     override suspend fun update(team: Team): Team? = newSuspendedTransaction(Dispatchers.IO, db = database) {
         val updated = TeamsTable.update({ TeamsTable.id eq team.id }) {
             it[name] = team.name
             it[userId] = team.userId
+            it[pokemons] = json.writeValueAsString(team.pokemons)
         }
         if (updated == 0) null else team
     }

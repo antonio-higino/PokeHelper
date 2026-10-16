@@ -1,5 +1,7 @@
 package com.example.domain
 
+import com.fasterxml.jackson.databind.JsonNode
+
 interface UserRepository {
     suspend fun list(page: Int, size: Int, username: String?): Page<User>
     suspend fun findById(id: Long): User?
@@ -10,9 +12,10 @@ interface UserRepository {
 }
 
 interface TeamRepository {
+    suspend fun list(page: Int, size: Int, name: String?, userId: Long?): Page<Team>
     suspend fun findById(id: Long): Team?
     suspend fun findByUserId(userId: Long): List<Team>
-    suspend fun create(name: String, userId: Long): Team
+    suspend fun create(name: String, userId: Long, pokemons: List<JsonNode> = emptyList()): Team
     suspend fun update(team: Team): Team?
     suspend fun delete(id: Long): Boolean
 }

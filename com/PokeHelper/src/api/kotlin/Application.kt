@@ -4,6 +4,7 @@ import com.example.adapters.postgres.ExposedTeamRepository
 import com.example.adapters.postgres.ExposedUserRepository
 import com.example.domain.TeamRepository
 import com.example.domain.UserRepository
+import com.example.usecases.TeamService
 import com.example.usecases.UserService
 import io.ktor.server.application.*
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
@@ -33,5 +34,8 @@ fun Application.module() {
     install(ContentNegotiation) {
         jackson()
     }
-    configureRouting(UserService(userRepository, teamRepository))
+    configureRouting(
+        userService = UserService(userRepository, teamRepository),
+        teamService = TeamService(teamRepository, userRepository)
+    )
 }

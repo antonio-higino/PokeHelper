@@ -1,5 +1,7 @@
 package com.example.domain
 
+import com.fasterxml.jackson.databind.JsonNode
+
 data class User(
     val id: Long,
     val username: String,
@@ -9,5 +11,6 @@ data class User(
 data class Team(
     val id: Long,
     val name: String,
-    val userId: Long
+    val userId: Long,
+    val pokemons: List<JsonNode> = emptyList()
 )

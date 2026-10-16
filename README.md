@@ -43,6 +43,25 @@ Invoke-RestMethod http://localhost:8080/users -Method Post -ContentType 'applica
 Invoke-RestMethod 'http://localhost:8080/users?page=1&size=20&username=ash'
 ```
 
+## API de times
+
+| Método | Rota | Resultado |
+| --- | --- | --- |
+| `GET` | `/teams?page=1&size=20&name=time&userId=1` | Lista times, com filtros exatos opcionais por `name` e `userId`. A resposta inclui `items`, `page`, `size` e `total`; `size` aceita de 1 a 100. |
+| `GET` | `/teams/{id}` | Busca um time por ID. |
+| `POST` | `/teams` | Cria um time; retorna `201` e o cabeçalho `Location`. |
+| `PUT` | `/teams/{id}` | Atualiza o nome e os Pokémon do time. |
+| `DELETE` | `/teams/{id}` | Remove um time e retorna `204`. |
+| `GET` | `/users/{id}/teams` | Lista os times associados ao usuário. |
+
+Um time possui `name`, `userId` e `pokemons`. `pokemons` deve conter de 1 a 6 objetos da PokéAPI, cada um com `id` inteiro positivo e `name`; IDs repetidos não são aceitos. Os objetos são preservados na resposta, de modo que campos adicionais retornados pela PokéAPI (como `types` e `sprites`) podem ser enviados e recuperados junto do time.
+
+Exemplo de criação:
+
+```powershell
+Invoke-RestMethod http://localhost:8080/teams -Method Post -ContentType 'application/json' -Body '{"name":"Time de Kanto","userId":1,"pokemons":[{"id":25,"name":"pikachu","types":[{"slot":1,"type":{"name":"electric"}}]}]}'
+```
+
 Para executar os testes, use `mise run test`; essa tarefa inicia o PostgreSQL em segundo plano antes de chamar o Gradle.
 
 Vídeo de demonstração:

@@ -17,12 +17,10 @@ import io.ktor.server.routing.route
 
 data class UserRequest(val username: String, val password: String)
 data class UserResponse(val id: Long, val username: String)
-data class TeamResponse(val id: Long, val name: String, val userId: Long)
 data class UserPageResponse(val items: List<UserResponse>, val page: Int, val size: Int, val total: Long)
 data class ErrorResponse(val error: String)
 
 private fun User.toResponse() = UserResponse(id, username)
-private fun Team.toResponse() = TeamResponse(id, name, userId)
 
 fun Route.userRoutes(service: UserService) {
     route("/users") {
