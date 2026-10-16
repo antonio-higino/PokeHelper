@@ -1,10 +1,19 @@
 [tools]
 java = "21"
+gradle = "9.5.1"
 
 [tasks.build]
 description = "Compila o projeto Kotlin e gera o artefato (JAR)"
-run = "gradlew.bat build -x test"
+run = "gradle build -x test"
 
 [tasks.test]
-description = "Executa a suíte de testes automatizados"
-run = "gradlew.bat test"
+description = "Sobe o PostgreSQL e executa a suíte de testes"
+run = "gradle test"
+
+[tasks.up]
+description = "Sobe a API e o PostgreSQL com Docker Compose"
+run = "docker compose up --build"
+
+[tasks.down]
+description = "Encerra os serviços do Docker Compose"
+run = "docker compose down"
