@@ -4,7 +4,10 @@ import com.example.adapters.postgres.ExposedTeamRepository
 import com.example.adapters.postgres.ExposedUserRepository
 import com.example.domain.TeamRepository
 import com.example.domain.UserRepository
+import com.example.usecases.UserService
 import io.ktor.server.application.*
+import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.serialization.jackson.jackson
 import org.flywaydb.core.Flyway
 import org.jetbrains.exposed.sql.Database
 
@@ -27,5 +30,8 @@ fun Application.module() {
     val userRepository: UserRepository = ExposedUserRepository(database)
     val teamRepository: TeamRepository = ExposedTeamRepository(database)
 
-    configureRouting(userRepository, teamRepository)
+    install(ContentNegotiation) {
+        jackson()
+    }
+    configureRouting(UserService(userRepository, teamRepository))
 }
