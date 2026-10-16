@@ -20,6 +20,7 @@ dependencies {
     implementation(ktorLibs.server.netty)
     implementation("io.ktor:ktor-server-content-negotiation-jvm:3.5.2")
     implementation("io.ktor:ktor-serialization-jackson-jvm:3.5.2")
+    implementation("io.ktor:ktor-server-status-pages-jvm:3.5.2")
     implementation(libs.logback.classic)
     implementation("org.flywaydb:flyway-core:9.22.3")
     implementation("org.postgresql:postgresql:42.7.5")

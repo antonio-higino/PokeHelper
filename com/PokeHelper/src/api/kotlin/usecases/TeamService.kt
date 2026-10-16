@@ -22,6 +22,7 @@ class TeamService(
 
     suspend fun create(name: String, userId: Long, pokemons: List<JsonNode>): Team? {
         validate(name, pokemons)
+        require(userId > 0) { "userId must be a positive integer" }
         if (users.findById(userId) == null) return null
         return teams.create(name, userId, pokemons)
     }
