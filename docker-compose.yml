@@ -5,21 +5,30 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - PORT=8080
-    # depends_on:
-    #   - db
+      PORT: ${PORT:-8080}
+      DATABASE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-app_db}
+      DATABASE_USER: ${POSTGRES_USER:-admin}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-admin}
+    depends_on:
+      db:
+        condition: service_healthy
 
-  # db:
-  #   image: postgres:16-alpine
-  #   container_name: projeto_faculdade_db
-  #   environment:
-  #     POSTGRES_USER: admin
-  #     POSTGRES_PASSWORD: admin
-  #     POSTGRES_DB: app_db
-  #   ports:
-  #     - "5432:5432"
-  #   volumes:
-  #     - postgres_data:/var/lib/postgresql/data
+  db:
+    image: postgres:16-alpine
+    container_name: poke_helper_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin}
+      POSTGRES_DB: ${POSTGRES_DB:-app_db}
+    ports:
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-app_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
-# volumes:
-#   postgres_data:
+volumes:
+  postgres_data:
