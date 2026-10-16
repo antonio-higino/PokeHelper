@@ -103,7 +103,7 @@ class ProblemDetailsTest {
     }
 }
 
-private fun io.ktor.server.application.Application.configureTestApi() {
+internal fun io.ktor.server.application.Application.configureTestApi() {
     val users = object : UserRepository {
         override suspend fun list(page: Int, size: Int, username: String?) = Page(emptyList<User>(), page, size, 0)
         override suspend fun findById(id: Long): User? = null
