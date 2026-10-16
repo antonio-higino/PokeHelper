@@ -2,6 +2,7 @@ package com.example
 
 import com.example.adapters.postgres.ExposedTeamRepository
 import com.example.adapters.postgres.ExposedUserRepository
+import com.example.adapters.http.configureProblemDetails
 import com.example.domain.TeamRepository
 import com.example.domain.UserRepository
 import com.example.usecases.TeamService
@@ -34,6 +35,7 @@ fun Application.module() {
     install(ContentNegotiation) {
         jackson()
     }
+    configureProblemDetails()
     configureRouting(
         userService = UserService(userRepository, teamRepository),
         teamService = TeamService(teamRepository, userRepository)
