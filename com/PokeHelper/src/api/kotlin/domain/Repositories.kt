@@ -1,6 +1,7 @@
 package com.example.domain
 
 interface UserRepository {
+    suspend fun list(page: Int, size: Int, username: String?): Page<User>
     suspend fun findById(id: Long): User?
     suspend fun findByUsername(username: String): User?
     suspend fun create(username: String, password: String): User
@@ -15,3 +16,12 @@ interface TeamRepository {
     suspend fun update(team: Team): Team?
     suspend fun delete(id: Long): Boolean
 }
+
+data class Page<T>(
+    val items: List<T>,
+    val page: Int,
+    val size: Int,
+    val total: Long
+)
+
+class UsernameAlreadyExists : RuntimeException("Username already exists")

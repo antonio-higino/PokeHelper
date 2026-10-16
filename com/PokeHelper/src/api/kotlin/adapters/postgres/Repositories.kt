@@ -4,6 +4,8 @@ import com.example.domain.Team
 import com.example.domain.TeamRepository
 import com.example.domain.User
 import com.example.domain.UserRepository
+import com.example.domain.Page
+import com.example.domain.UsernameAlreadyExists
 import kotlinx.coroutines.Dispatchers
 import org.jetbrains.exposed.dao.id.LongIdTable
 import org.jetbrains.exposed.sql.Database
@@ -12,8 +14,10 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insertAndGetId
 import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 import org.jetbrains.exposed.sql.update
+import java.sql.SQLException
 
 internal object UsersTable : LongIdTable("users") {
     val username = varchar("username", 255)
@@ -38,6 +42,23 @@ private fun ResultRow.toTeam() = Team(
 )
 
 class ExposedUserRepository(private val database: Database) : UserRepository {
+    override suspend fun list(page: Int, size: Int, username: String?): Page<User> =
+        newSuspendedTransaction(Dispatchers.IO, db = database) {
+            val filter = username?.let { UsersTable.username eq it }
+            val countQuery = UsersTable.selectAll()
+            if (filter != null) countQuery.where { filter }
+            val total = countQuery.count()
+
+            val pageQuery = UsersTable.selectAll()
+            if (filter != null) pageQuery.where { filter }
+            val items = pageQuery
+                .orderBy(UsersTable.id to SortOrder.ASC)
+                .limit(size)
+                .offset((page.toLong() - 1) * size)
+                .map(ResultRow::toUser)
+            Page(items, page, size, total)
+        }
+
     override suspend fun findById(id: Long): User? = newSuspendedTransaction(Dispatchers.IO, db = database) {
         UsersTable.selectAll()
             .where { UsersTable.id eq id }
@@ -52,20 +73,24 @@ class ExposedUserRepository(private val database: Database) : UserRepository {
             ?.toUser()
     }
 
-    override suspend fun create(username: String, password: String): User = newSuspendedTransaction(Dispatchers.IO, db = database) {
-        val id = UsersTable.insertAndGetId {
-            it[UsersTable.username] = username
-            it[UsersTable.password] = password
-        }.value
-        User(id = id, username = username, password = password)
+    override suspend fun create(username: String, password: String): User = translateUniqueViolation {
+        newSuspendedTransaction(Dispatchers.IO, db = database) {
+            val id = UsersTable.insertAndGetId {
+                it[UsersTable.username] = username
+                it[UsersTable.password] = password
+            }.value
+            User(id = id, username = username, password = password)
+        }
     }
 
-    override suspend fun update(user: User): User? = newSuspendedTransaction(Dispatchers.IO, db = database) {
-        val updated = UsersTable.update({ UsersTable.id eq user.id }) {
-            it[username] = user.username
-            it[password] = user.password
+    override suspend fun update(user: User): User? = translateUniqueViolation {
+        newSuspendedTransaction(Dispatchers.IO, db = database) {
+            val updated = UsersTable.update({ UsersTable.id eq user.id }) {
+                it[username] = user.username
+                it[password] = user.password
+            }
+            if (updated == 0) null else user
         }
-        if (updated == 0) null else user
     }
 
     override suspend fun delete(id: Long): Boolean = newSuspendedTransaction(Dispatchers.IO, db = database) {
@@ -106,4 +131,11 @@ class ExposedTeamRepository(private val database: Database) : TeamRepository {
     override suspend fun delete(id: Long): Boolean = newSuspendedTransaction(Dispatchers.IO, db = database) {
         TeamsTable.deleteWhere { TeamsTable.id eq id } > 0
     }
+}
+
+private suspend fun <T> translateUniqueViolation(block: suspend () -> T): T = try {
+    block()
+} catch (exception: SQLException) {
+    if (exception.sqlState == "23505") throw UsernameAlreadyExists()
+    throw exception
 }
