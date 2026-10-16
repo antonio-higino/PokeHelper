@@ -1,0 +1,2 @@
+ALTER TABLE teams
+    ADD COLUMN pokemons TEXT NOT NULL DEFAULT '[]';

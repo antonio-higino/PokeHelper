@@ -17,6 +17,7 @@ import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class ServerTest {
     private val json = ObjectMapper()
@@ -110,6 +111,71 @@ class ServerTest {
         } finally {
             if (id != null) client.delete("/users/$id")
             if (otherId != null) client.delete("/users/$otherId")
+        }
+    }
+
+    @Test
+    fun `teams CRUD stores PokeAPI objects with pagination filters and relationship`() = testApplication {
+        configure()
+        val username = "team-owner-${UUID.randomUUID()}"
+        var userId: Long? = null
+        var teamId: Long? = null
+
+        try {
+            val user = client.post("/users") {
+                contentType(ContentType.Application.Json)
+                setBody(json.writeValueAsString(mapOf("username" to username, "password" to "secret")))
+            }
+            assertEquals(HttpStatusCode.Created, user.status)
+            userId = json.readTree(user.bodyAsText())["id"].asLong()
+
+            val pokemon = mapOf(
+                "id" to 25,
+                "name" to "pikachu",
+                "types" to listOf(mapOf("slot" to 1, "type" to mapOf("name" to "electric")))
+            )
+            val created = client.post("/teams") {
+                contentType(ContentType.Application.Json)
+                setBody(json.writeValueAsString(mapOf("name" to "Kanto", "userId" to userId, "pokemons" to listOf(pokemon))))
+            }
+            assertEquals(HttpStatusCode.Created, created.status)
+            teamId = json.readTree(created.bodyAsText())["id"].asLong()
+            assertEquals("electric", json.readTree(created.bodyAsText())["pokemons"][0]["types"][0]["type"]["name"].asText())
+            assertEquals("/teams/$teamId", created.headers["Location"])
+
+            val duplicatePokemon = client.post("/teams") {
+                contentType(ContentType.Application.Json)
+                setBody(json.writeValueAsString(mapOf("name" to "Invalid", "userId" to userId, "pokemons" to listOf(pokemon, pokemon))))
+            }
+            assertEquals(HttpStatusCode.BadRequest, duplicatePokemon.status)
+
+            val page = client.get("/teams?page=1&size=1&name=Kanto&userId=$userId")
+            assertEquals(HttpStatusCode.OK, page.status)
+            val pageBody = json.readTree(page.bodyAsText())
+            assertEquals(1L, pageBody["total"].asLong())
+            assertEquals(teamId, pageBody["items"][0]["id"].asLong())
+            assertEquals(HttpStatusCode.BadRequest, client.get("/teams?size=101").status)
+
+            assertEquals(HttpStatusCode.OK, client.get("/teams/$teamId").status)
+            assertEquals(HttpStatusCode.BadRequest, client.get("/teams/0").status)
+            val nested = json.readTree(client.get("/users/$userId/teams").bodyAsText())
+            assertEquals(teamId, nested[0]["id"].asLong())
+
+            val updatedPokemon = mapOf("id" to 6, "name" to "charizard")
+            val updated = client.put("/teams/$teamId") {
+                contentType(ContentType.Application.Json)
+                setBody(json.writeValueAsString(mapOf("name" to "Kanto Updated", "pokemons" to listOf(pokemon, updatedPokemon))))
+            }
+            assertEquals(HttpStatusCode.OK, updated.status)
+            assertEquals(2, json.readTree(updated.bodyAsText())["pokemons"].size())
+            assertTrue(json.readTree(client.get("/teams?name=Kanto").bodyAsText())["items"].isEmpty)
+
+            assertEquals(HttpStatusCode.NoContent, client.delete("/teams/$teamId").status)
+            assertEquals(HttpStatusCode.NotFound, client.get("/teams/$teamId").status)
+            teamId = null
+        } finally {
+            if (teamId != null) client.delete("/teams/$teamId")
+            if (userId != null) client.delete("/users/$userId")
         }
     }
 
