@@ -8,7 +8,7 @@ run = "gradle build -x test"
 
 [tasks.test]
 description = "Sobe o PostgreSQL e executa a suíte de testes"
-run = "gradle test"
+run = ["docker compose up -d --wait db", "gradle test"]
 
 [tasks.up]
 description = "Sobe a API e o PostgreSQL com Docker Compose"
