@@ -23,7 +23,6 @@ Desktop.ini
 # Local environment / toolchain
 .mise/
 .env
-.env.*
 local.properties
 
 # Test / coverage outputs
