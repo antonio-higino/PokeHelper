@@ -64,9 +64,6 @@ Invoke-RestMethod http://localhost:8080/teams -Method Post -ContentType 'applica
 
 Para executar os testes, use `mise run test`; essa tarefa inicia o PostgreSQL em segundo plano antes de chamar o Gradle.
 
-Vídeo de demonstração:
-https://youtu.be/7IoKYcgAcBw
-
 ## Documentação interativa da API
 
 Com a API em execução em `http://localhost:8080`:
@@ -75,3 +72,9 @@ Com a API em execução em `http://localhost:8080`:
 - Especificação OpenAPI (JSON): http://localhost:8080/swagger/openapi.json
 
 A especificação é gerada das rotas e das descrições `describe` do Ktor quando a aplicação inicia. Ela inclui os parâmetros, corpos, respostas e erros em `application/problem+json`. A Swagger UI usa os arquivos do Swagger hospedados no unpkg, portanto o navegador precisa de acesso à internet para carregar a interface.
+
+
+## Vídeos
+
+- Sprint 0: https://youtu.be/wUd9-fjZmRQ
+- Sprint 1: https://youtu.be/u50RZ6qEORU
