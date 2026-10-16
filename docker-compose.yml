@@ -15,7 +15,7 @@ services:
 
   db:
     image: postgres:16-alpine
-    container_name: projeto_faculdade_db
+    container_name: poke_helper_db
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-admin}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin}
