@@ -25,7 +25,11 @@ class OpenApiTest {
         assertEquals("PokeHelper API", spec["info"]["title"].asText())
 
         val paths = spec["paths"]
-        assertEquals(setOf("/", "/users", "/users/{id}", "/users/{id}/teams", "/teams", "/teams/{id}"),
+        assertEquals(setOf(
+            "/", "/users", "/users/{id}", "/users/{id}/teams", "/teams", "/teams/{id}",
+            "/pokemon/types", "/pokemon/types/{name}", "/pokemon/{identifier}",
+            "/recommendations", "/recommendations/pokemon"
+        ),
             paths.fieldNames().asSequence().toSet())
         val methods = mapOf(
             "/" to setOf("get"),
@@ -33,7 +37,12 @@ class OpenApiTest {
             "/users/{id}" to setOf("get", "put", "delete"),
             "/users/{id}/teams" to setOf("get"),
             "/teams" to setOf("get", "post"),
-            "/teams/{id}" to setOf("get", "put", "delete")
+            "/teams/{id}" to setOf("get", "put", "delete"),
+            "/pokemon/types" to setOf("get"),
+            "/pokemon/types/{name}" to setOf("get"),
+            "/pokemon/{identifier}" to setOf("get"),
+            "/recommendations" to setOf("post"),
+            "/recommendations/pokemon" to setOf("post")
         )
         for ((path, expected) in methods) {
             assertEquals(expected, paths[path].fieldNames().asSequence().toSet(), path)
@@ -41,15 +50,15 @@ class OpenApiTest {
                 val operation = paths[path][method]
                 assertTrue(operation["summary"].asText().isNotBlank(), "$method $path needs a summary")
                 val responses = operation["responses"]
-                val success = if (method == "post") "201" else if (method == "delete") "204" else "200"
+                val success = if (path in setOf("/users", "/teams") && method == "post") "201" else if (method == "delete") "204" else "200"
                 assertNotNull(responses[success], "$method $path needs a success response")
                 if (method != "delete") assertNotNull(responses[success]["content"], "$method $path needs a response body")
-                if (path != "/") assertProblemSchema(spec, responses["400"], "$method $path 400")
+                if (path !in setOf("/", "/pokemon/types")) assertProblemSchema(spec, responses["400"], "$method $path 400")
                 assertProblemSchema(spec, responses["500"], "$method $path 500")
                 if ("{id}" in path || (path == "/teams" && method == "post")) {
                     assertProblemSchema(spec, responses["404"], "$method $path 404")
                 }
-                if (method == "post" || method == "put" || method == "delete") {
+                if (path in setOf("/users", "/teams", "/users/{id}", "/teams/{id}") && (method == "post" || method == "put" || method == "delete")) {
                     assertProblemSchema(spec, responses["409"], "$method $path 409")
                 }
                 if (method == "post" || method == "put") {

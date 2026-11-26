@@ -12,12 +12,14 @@ Como rodar:
 
 1. Clone o repositório
 2. Instale o Docker com Docker Compose e, para execução local, Java 21 e `mise`
-3. Para subir a API e o PostgreSQL:
+3. Para subir a API, o PostgreSQL e os microsserviços Go:
    ```bash
    docker compose up --build
    ```
    Ou use `mise run up`. A API fica em `http://localhost:8080`. O PostgreSQL usa a porta `5432` por padrão, ou `POSTGRES_HOST_PORT` quando definida no `.env` (por exemplo, `5433`).
 4. Para encerrar os serviços, execute `docker compose down`.
+
+O Compose também inicia os serviços `pokemon-api` (porta `8081`) e `recommendation` (porta `8082`). A API Kotlin conversa com ambos pela rede interna do Compose; o frontend usa apenas a API Kotlin na porta `8080`.
 
 As configurações do banco podem ser sobrescritas pelas variáveis `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` e `POSTGRES_HOST_PORT` (porta publicada no host). Os valores padrão são destinados apenas ao desenvolvimento local. O Flyway aplica as migrações de `com/PokeHelper/src/api/resources/db/migration` quando a API inicia.
 
@@ -62,7 +64,30 @@ Exemplo de criação:
 Invoke-RestMethod http://localhost:8080/teams -Method Post -ContentType 'application/json' -Body '{"name":"Time de Kanto","userId":1,"pokemons":[{"id":25,"name":"pikachu","types":[{"slot":1,"type":{"name":"electric"}}]}]}'
 ```
 
-Para executar os testes, use `mise run test`; essa tarefa inicia o PostgreSQL em segundo plano antes de chamar o Gradle.
+## Catálogo e recomendações
+
+| Método | Rota da API Kotlin | Resultado |
+| --- | --- | --- |
+| `GET` | `/pokemon/{name-ou-id}` | Obtém um Pokémon via o microsserviço de catálogo, que consulta e armazena em cache a resposta da PokéAPI. |
+| `GET` | `/pokemon/types` | Obtém os 18 tipos e suas relações de dano do cache do catálogo. |
+| `GET` | `/pokemon/types/{type}` | Obtém um tipo específico e sua lista de Pokémon. |
+| `POST` | `/recommendations` | Calcula a matriz de cobertura defensiva e até cinco tipos recomendados. |
+| `POST` | `/recommendations/pokemon` | Sugere Pokémon para um tipo, considerando o time informado. |
+
+Os dois `POST` recebem `pokemons`, com os objetos completos retornados por `/pokemon/{name-ou-id}`. A rota de candidatos também recebe `type`:
+
+```json
+{
+  "type": "ground",
+  "pokemons": [{ "id": 25, "name": "pikachu", "types": [{ "slot": 1, "type": { "name": "electric" } }] }]
+}
+```
+
+O microsserviço de recomendações consome exclusivamente o microsserviço de catálogo. Ele não consulta a PokéAPI diretamente, aplica o cálculo defensivo do projeto Web I e descarta formas Mega/Gigantamax/Totem, Pokémon lendários, míticos, bebês e os Pokémon já presentes no time.
+
+Para executar todos os testes, use `mise run test`; essa tarefa inicia o PostgreSQL em segundo plano, executa as suítes dos dois serviços Go e então chama o Gradle.
+
+Ao usar uma porta diferente de `5432` em `POSTGRES_HOST_PORT`, configure também `DATABASE_URL` no ambiente em que o Gradle é executado. Por exemplo, para a porta `5433`, no PowerShell: `$env:DATABASE_URL = 'jdbc:postgresql://localhost:5433/app_db'`. Ajuste também `DATABASE_USER` e `DATABASE_PASSWORD` se as credenciais do PostgreSQL forem alteradas.
 
 ## Documentação interativa da API
 

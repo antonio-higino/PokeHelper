@@ -15,7 +15,7 @@ import kotlin.test.assertTrue
 class PostgresRepositoriesTest {
     @Test
     fun `repositories persist users and teams in PostgreSQL`(): Unit = runBlocking {
-        val databaseUrl = System.getenv("DATABASE_URL") ?: "jdbc:postgresql://localhost:5433/app_db"
+        val databaseUrl = System.getenv("DATABASE_URL") ?: "jdbc:postgresql://localhost:5432/app_db"
         val databaseUser = System.getenv("DATABASE_USER") ?: "admin"
         val databasePassword = System.getenv("DATABASE_PASSWORD") ?: "admin"
 

@@ -1,6 +1,7 @@
 package com.PokeHelper
 
 import com.example.adapters.http.configureProblemDetails
+import com.example.adapters.services.PokeServicesClient
 import com.example.configureRouting
 import com.example.domain.Page
 import com.example.domain.Team
@@ -125,5 +126,8 @@ internal fun io.ktor.server.application.Application.configureTestApi() {
     }
     install(ContentNegotiation) { jackson() }
     configureProblemDetails()
-    configureRouting(UserService(users, teams), TeamService(teams, users))
+    configureRouting(
+        UserService(users, teams), TeamService(teams, users),
+        PokeServicesClient("http://localhost:18081", "http://localhost:18082")
+    )
 }

@@ -13,6 +13,7 @@ import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.response.respondText
 import java.sql.SQLException
 import java.util.concurrent.CancellationException
+import com.example.adapters.services.DownstreamServiceException
 
 data class ProblemDetails(
     val type: String,
@@ -35,6 +36,7 @@ fun Application.configureProblemDetails() {
                 cause is InvalidRequestException || cause is IllegalArgumentException || cause is BadRequestException ->
                     HttpStatusCode.BadRequest to (cause.message ?: "Invalid request")
                 cause is ResourceNotFoundException -> HttpStatusCode.NotFound to (cause.message ?: "Resource not found")
+                cause is DownstreamServiceException -> HttpStatusCode.BadGateway to (cause.message ?: "A required service failed")
                 cause is UsernameAlreadyExists -> HttpStatusCode.Conflict to "Username already exists"
                 cause.hasIntegrityViolation() -> HttpStatusCode.Conflict to "The request conflicts with a database constraint"
                 else -> {

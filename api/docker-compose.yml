@@ -1,7 +1,33 @@
 services:
+  pokemon-api:
+    build:
+      context: ../pokemonApiService
+    ports:
+      - "${POKEMON_API_HOST_PORT:-8081}:8081"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  recommendation:
+    build:
+      context: ../recomendationService
+    environment:
+      POKEMON_API_SERVICE_URL: http://pokemon-api:8081
+    depends_on:
+      pokemon-api:
+        condition: service_healthy
+    ports:
+      - "${RECOMMENDATION_HOST_PORT:-8082}:8082"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8082/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   app:
     build: .
-    container_name: poke_helper
     ports:
       - "8080:8080"
     environment:
@@ -9,13 +35,18 @@ services:
       DATABASE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-app_db}
       DATABASE_USER: ${POSTGRES_USER:-admin}
       DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-admin}
+      POKEMON_API_SERVICE_URL: http://pokemon-api:8081
+      RECOMMENDATION_SERVICE_URL: http://recommendation:8082
     depends_on:
       db:
+        condition: service_healthy
+      pokemon-api:
+        condition: service_healthy
+      recommendation:
         condition: service_healthy
 
   db:
     image: postgres:16-alpine
-    container_name: poke_helper_db
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-admin}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin}

@@ -2,6 +2,9 @@ package com.example
 
 import com.example.adapters.http.userRoutes
 import com.example.adapters.http.teamRoutes
+import com.example.adapters.http.pokemonRoutes
+import com.example.adapters.http.recommendationRoutes
+import com.example.adapters.services.PokeServicesClient
 import com.example.adapters.http.serverError
 import com.example.usecases.TeamService
 import com.example.usecases.UserService
@@ -19,10 +22,12 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 
 @OptIn(ExperimentalKtorApi::class)
-fun Application.configureRouting(userService: UserService, teamService: TeamService) {
+fun Application.configureRouting(userService: UserService, teamService: TeamService, pokeServices: PokeServicesClient) {
     routing {
         userRoutes(userService)
         teamRoutes(teamService)
+        pokemonRoutes(pokeServices)
+        recommendationRoutes(pokeServices)
         get("/") {
             call.respondText("Hello, World!")
         }.describe {

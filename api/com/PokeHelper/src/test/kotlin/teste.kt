@@ -79,7 +79,7 @@ class ServerTest {
             assertEquals(HttpStatusCode.BadRequest, client.get("/users/0").status)
 
             val db = Database.connect(
-                System.getenv("DATABASE_URL") ?: "jdbc:postgresql://localhost:5433/app_db",
+                System.getenv("DATABASE_URL") ?: "jdbc:postgresql://localhost:5432/app_db",
                 driver = "org.postgresql.Driver",
                 user = System.getenv("DATABASE_USER") ?: "admin",
                 password = System.getenv("DATABASE_PASSWORD") ?: "admin"

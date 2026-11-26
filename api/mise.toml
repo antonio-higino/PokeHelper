@@ -3,12 +3,12 @@ java = "21"
 gradle = "9.5.1"
 
 [tasks.build]
-description = "Compila o projeto Kotlin e gera o artefato (JAR)"
-run = "gradle build -x test"
+description = "Compila os microsserviços Go e gera o artefato Kotlin"
+run = ["go -C ../pokemonApiService test ./...", "go -C ../recomendationService test ./...", "gradle build -x test"]
 
 [tasks.test]
-description = "Sobe o PostgreSQL e executa a suíte de testes"
-run = ["docker compose up -d --wait db", "gradle test"]
+description = "Sobe as dependências e executa as suítes Go e Kotlin"
+run = ["docker compose up -d --wait db", "go -C ../pokemonApiService test ./...", "go -C ../recomendationService test ./...", "gradle test"]
 
 [tasks.up]
 description = "Sobe a API e o PostgreSQL com Docker Compose"
