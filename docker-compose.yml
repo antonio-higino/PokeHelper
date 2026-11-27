@@ -1,0 +1,86 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: poke_helper_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin}
+      POSTGRES_DB: ${POSTGRES_DB:-app_db}
+    ports:
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-app_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  pokemon-api:
+    profiles: ["go"]
+    build:
+      context: ./pokemonApiService
+    container_name: poke_helper_catalog
+    environment:
+      PORT: "8081"
+    expose:
+      - "8081"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  recommendation:
+    profiles: ["go"]
+    build:
+      context: ./recomendationService
+    container_name: poke_helper_recommendation
+    environment:
+      PORT: "50051"
+      POKEMON_API_SERVICE_URL: http://pokemon-api:8081
+    expose:
+      - "50051"
+    depends_on:
+      pokemon-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/grpc_health_probe", "-addr=:50051"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    container_name: poke_helper
+    ports:
+      - "${API_HOST_PORT:-8080}:8080"
+    environment:
+      PORT: 8080
+      DATABASE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-app_db}
+      DATABASE_USER: ${POSTGRES_USER:-admin}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-admin}
+      RECOMMENDATION_TARGET: ${RECOMMENDATION_TARGET:-recommendation:50051}
+      RECOMMENDATION_TIMEOUT_MS: ${RECOMMENDATION_TIMEOUT_MS:-15000}
+      POKEMON_API_SERVICE_URL: ${POKEMON_API_SERVICE_URL:-http://pokemon-api:8081}
+      POKEMON_API_TIMEOUT_MS: ${POKEMON_API_TIMEOUT_MS:-10000}
+    depends_on:
+      db:
+        condition: service_healthy
+      pokemon-api:
+        condition: service_healthy
+        required: false
+      recommendation:
+        condition: service_healthy
+        required: false
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health/ready > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 30s
+      retries: 5
+
+volumes:
+  postgres_data:
