@@ -1,6 +1,6 @@
-package com.PokeHelper
+package com.pokehelper
 
-import com.example.adapters.postgres.ExposedTeamRepository
+import com.pokehelper.adapters.postgres.ExposedTeamRepository
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
@@ -12,27 +12,26 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
-import org.jetbrains.exposed.sql.Database
+import com.pokehelper.support.PostgresTestDatabase
+import com.pokehelper.support.useTestDatabase
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class ServerTest {
+class ApiIntegrationTest {
     private val json = ObjectMapper()
 
     @Test
     fun `test root endpoint`() = testApplication {
-        // loads default configuration
-        configure()
-        // verify server root returns 200
+        useTestDatabase()
         assertEquals(HttpStatusCode.OK, client.get("/").status)
     }
 
     @Test
     fun `users CRUD respects pagination filtering relationship and HTTP statuses`() = testApplication {
-        configure()
+        useTestDatabase()
         val username = "api-test-${UUID.randomUUID()}"
         val renamedUsername = "renamed-$username"
         val otherUsername = "other-test-${UUID.randomUUID()}"
@@ -78,13 +77,7 @@ class ServerTest {
             assertEquals(HttpStatusCode.OK, client.get("/users/$id").status)
             assertEquals(HttpStatusCode.BadRequest, client.get("/users/0").status)
 
-            val db = Database.connect(
-                System.getenv("DATABASE_URL") ?: "jdbc:postgresql://localhost:5433/app_db",
-                driver = "org.postgresql.Driver",
-                user = System.getenv("DATABASE_USER") ?: "admin",
-                password = System.getenv("DATABASE_PASSWORD") ?: "admin"
-            )
-            val team = ExposedTeamRepository(db).create("API test team", id)
+            val team = ExposedTeamRepository(PostgresTestDatabase.database).create("API test team", id)
             val teams = client.get("/users/$id/teams")
             assertEquals(HttpStatusCode.OK, teams.status)
             assertEquals(team.id, json.readTree(teams.bodyAsText())[0]["id"].asLong())
@@ -116,7 +109,7 @@ class ServerTest {
 
     @Test
     fun `teams CRUD stores PokeAPI objects with pagination filters and relationship`() = testApplication {
-        configure()
+        useTestDatabase()
         val username = "team-owner-${UUID.randomUUID()}"
         var userId: Long? = null
         var teamId: Long? = null
@@ -169,6 +162,9 @@ class ServerTest {
             assertEquals(HttpStatusCode.OK, updated.status)
             assertEquals(2, json.readTree(updated.bodyAsText())["pokemons"].size())
             assertTrue(json.readTree(client.get("/teams?name=Kanto").bodyAsText())["items"].isEmpty)
+
+            assertEquals(HttpStatusCode.ServiceUnavailable, client.get("/teams/$teamId/analysis").status)
+            assertEquals(HttpStatusCode.OK, client.get("/health/ready").status)
 
             assertEquals(HttpStatusCode.NoContent, client.delete("/teams/$teamId").status)
             assertEquals(HttpStatusCode.NotFound, client.get("/teams/$teamId").status)

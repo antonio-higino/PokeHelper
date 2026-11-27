@@ -1,10 +1,10 @@
-package com.PokeHelper
+package com.pokehelper
 
-import com.example.adapters.postgres.ExposedTeamRepository
-import com.example.adapters.postgres.ExposedUserRepository
+import com.pokehelper.adapters.postgres.ExposedTeamRepository
+import com.pokehelper.adapters.postgres.ExposedUserRepository
 import kotlinx.coroutines.runBlocking
-import org.flywaydb.core.Flyway
-import org.jetbrains.exposed.sql.Database
+import com.pokehelper.support.PostgresTestDatabase
+import com.pokehelper.support.pokemon
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -15,21 +15,7 @@ import kotlin.test.assertTrue
 class PostgresRepositoriesTest {
     @Test
     fun `repositories persist users and teams in PostgreSQL`(): Unit = runBlocking {
-        val databaseUrl = System.getenv("DATABASE_URL") ?: "jdbc:postgresql://localhost:5433/app_db"
-        val databaseUser = System.getenv("DATABASE_USER") ?: "admin"
-        val databasePassword = System.getenv("DATABASE_PASSWORD") ?: "admin"
-
-        Flyway.configure()
-            .dataSource(databaseUrl, databaseUser, databasePassword)
-            .load()
-            .migrate()
-
-        val database = Database.connect(
-            url = databaseUrl,
-            driver = "org.postgresql.Driver",
-            user = databaseUser,
-            password = databasePassword
-        )
+        val database = PostgresTestDatabase.database
         val users = ExposedUserRepository(database)
         val teams = ExposedTeamRepository(database)
         val user = users.create("repo-test-${UUID.randomUUID()}", "test-password")
@@ -42,10 +28,11 @@ class PostgresRepositoriesTest {
             assertEquals(updatedUser, users.update(updatedUser))
             assertEquals(updatedUser, users.findById(user.id))
 
-            val team = teams.create("Test team", user.id)
+            val team = teams.create("Test team", user.id, listOf(pokemon(6, "charizard", "fire", "flying")))
             try {
                 assertEquals(team, teams.findById(team.id))
                 assertEquals(listOf(team), teams.findByUserId(user.id))
+                assertEquals(listOf("fire", "flying"), teams.findById(team.id)!!.pokemons.single().types)
 
                 val updatedTeam = team.copy(name = "Updated team")
                 assertEquals(updatedTeam, teams.update(updatedTeam))
