@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -47,6 +49,10 @@ func NewPokeAPIClient(baseURL string, ttl time.Duration, client *http.Client) *P
 }
 
 func (c *PokeAPIClient) Get(resource string) ([]byte, int, error) {
+	return c.GetContext(context.Background(), resource)
+}
+
+func (c *PokeAPIClient) GetContext(ctx context.Context, resource string) ([]byte, int, error) {
 	c.mu.RLock()
 	entry, found := c.cache[resource]
 	c.mu.RUnlock()
@@ -54,7 +60,7 @@ func (c *PokeAPIClient) Get(resource string) ([]byte, int, error) {
 		return entry.body, http.StatusOK, nil
 	}
 
-	request, err := http.NewRequest(http.MethodGet, c.baseURL+resource, nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+resource, nil)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -115,7 +121,7 @@ func (s *Server) proxy(w http.ResponseWriter, r *http.Request, prefix, upstreamP
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	body, status, err := s.client.Get(upstreamPrefix + url.PathEscape(identifier))
+	body, status, err := s.client.GetContext(r.Context(), upstreamPrefix+url.PathEscape(identifier))
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "could not reach PokeAPI")
 		return
@@ -133,7 +139,7 @@ func (s *Server) proxy(w http.ResponseWriter, r *http.Request, prefix, upstreamP
 	_, _ = w.Write(body)
 }
 
-func (s *Server) handleTypes(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleTypes(w http.ResponseWriter, r *http.Request) {
 	type result struct {
 		index int
 		body  json.RawMessage
@@ -142,7 +148,7 @@ func (s *Server) handleTypes(w http.ResponseWriter, _ *http.Request) {
 	results := make(chan result, len(expectedTypes))
 	for index, typeName := range expectedTypes {
 		go func(index int, typeName string) {
-			body, status, err := s.client.Get("/type/" + typeName)
+			body, status, err := s.client.GetContext(r.Context(), "/type/"+typeName)
 			if err != nil {
 				results <- result{index: index, err: err}
 				return
@@ -167,9 +173,11 @@ func (s *Server) handleTypes(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
+var identifierPattern = regexp.MustCompile(`^[a-z0-9-]+$`)
+
 func safeIdentifier(value string) (string, error) {
 	value, err := url.PathUnescape(value)
-	if err != nil || value == "" || strings.Contains(value, "/") {
+	if err != nil || !identifierPattern.MatchString(strings.ToLower(value)) {
 		return "", fmt.Errorf("resource identifier must be one path segment")
 	}
 	return strings.ToLower(value), nil

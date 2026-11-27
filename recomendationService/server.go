@@ -1,9 +1,9 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -32,26 +32,30 @@ func newCatalogClient(baseURL string, client *http.Client) *catalogClient {
 	return &catalogClient{baseURL: strings.TrimRight(baseURL, "/"), client: client}
 }
 
-func (c *catalogClient) get(path string, destination any) error {
-	response, err := c.client.Get(c.baseURL + path)
+func (c *catalogClient) get(ctx context.Context, path string, destination any) error {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
+	if err != nil {
+		return err
+	}
+	response, err := c.client.Do(request)
 	if err != nil {
 		return err
 	}
 	defer response.Body.Close()
 	if response.StatusCode == http.StatusNotFound {
-		return fmt.Errorf("catalog resource not found")
+		return errNotFound
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return fmt.Errorf("catalog returned status %d", response.StatusCode)
+		return errUnavailable
 	}
 	return json.NewDecoder(io.LimitReader(response.Body, 12<<20)).Decode(destination)
 }
 
-func (c *catalogClient) types() ([]TypeData, error) {
+func (c *catalogClient) types(ctx context.Context) ([]TypeData, error) {
 	var response struct {
 		Items []TypeData `json:"items"`
 	}
-	if err := c.get("/types", &response); err != nil {
+	if err := c.get(ctx, "/types", &response); err != nil {
 		return nil, err
 	}
 	if len(response.Items) == 0 {
@@ -60,15 +64,15 @@ func (c *catalogClient) types() ([]TypeData, error) {
 	return response.Items, nil
 }
 
-func (c *catalogClient) pokemon(name string) (Pokemon, error) {
+func (c *catalogClient) pokemon(ctx context.Context, name string) (Pokemon, error) {
 	var pokemon Pokemon
-	err := c.get("/pokemon/"+url.PathEscape(name), &pokemon)
+	err := c.get(ctx, "/pokemon/"+url.PathEscape(name), &pokemon)
 	return pokemon, err
 }
 
-func (c *catalogClient) species(name string) (Species, error) {
+func (c *catalogClient) species(ctx context.Context, name string) (Species, error) {
 	var species Species
-	err := c.get("/species/"+url.PathEscape(name), &species)
+	err := c.get(ctx, "/species/"+url.PathEscape(name), &species)
 	return species, err
 }
 
@@ -96,7 +100,7 @@ func (s *Server) handleAnalysis(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	types, err := s.catalog.types()
+	types, err := s.catalog.types(r.Context())
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "could not load type data")
 		return
@@ -122,7 +126,7 @@ func (s *Server) handlePokemonRecommendations(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusBadRequest, "type is required")
 		return
 	}
-	types, err := s.catalog.types()
+	types, err := s.catalog.types(r.Context())
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "could not load type data")
 		return
@@ -134,7 +138,7 @@ func (s *Server) handlePokemonRecommendations(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	recommendations, err := s.recommendPokemon(request.Pokemons, request.Type, requestedType, index)
+	recommendations, err := s.recommendPokemon(r.Context(), request.Pokemons, request.Type, requestedType, index)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "could not load Pokémon candidates")
 		return
@@ -292,7 +296,7 @@ func hasType(resources []NamedResource, target string) bool {
 	return false
 }
 
-func (s *Server) recommendPokemon(team []Pokemon, primaryType string, requestedType TypeData, types map[string]TypeData) ([]CandidateRecommendation, error) {
+func (s *Server) recommendPokemon(ctx context.Context, team []Pokemon, primaryType string, requestedType TypeData, types map[string]TypeData) ([]CandidateRecommendation, error) {
 	ranks := combinationRanks(team, primaryType, types)
 	inTeam := make(map[int]bool, len(team))
 	for _, pokemon := range team {
@@ -304,6 +308,7 @@ func (s *Server) recommendPokemon(team []Pokemon, primaryType string, requestedT
 	}
 	jobs := make(chan NamedResource)
 	results := make(chan *CandidateRecommendation, len(entries))
+	failures := make(chan error, len(entries)*2)
 	var workers sync.WaitGroup
 	for range 12 {
 		workers.Add(1)
@@ -313,12 +318,20 @@ func (s *Server) recommendPokemon(team []Pokemon, primaryType string, requestedT
 				if isExcludedForm(resource.Name) {
 					continue
 				}
-				pokemon, err := s.catalog.pokemon(resource.Name)
-				if err != nil || inTeam[pokemon.ID] {
+				pokemon, err := s.catalog.pokemon(ctx, resource.Name)
+				if err != nil {
+					failures <- err
 					continue
 				}
-				species, err := s.catalog.species(pokemon.Species.Name)
-				if err != nil || species.IsBaby || species.IsLegendary || species.IsMythical {
+				if inTeam[pokemon.ID] {
+					continue
+				}
+				species, err := s.catalog.species(ctx, pokemon.Species.Name)
+				if err != nil {
+					failures <- err
+					continue
+				}
+				if species.IsBaby || species.IsLegendary || species.IsMythical {
 					continue
 				}
 				key := combinationKey(primaryType, pokemon)
@@ -331,8 +344,13 @@ func (s *Server) recommendPokemon(team []Pokemon, primaryType string, requestedT
 		}()
 	}
 	go func() {
+	queue:
 		for _, entry := range entries {
-			jobs <- entry.Pokemon
+			select {
+			case jobs <- entry.Pokemon:
+			case <-ctx.Done():
+				break queue
+			}
 		}
 		close(jobs)
 		workers.Wait()
@@ -342,6 +360,14 @@ func (s *Server) recommendPokemon(team []Pokemon, primaryType string, requestedT
 	candidates := make([]CandidateRecommendation, 0, len(entries))
 	for candidate := range results {
 		candidates = append(candidates, *candidate)
+	}
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	select {
+	case <-failures:
+		return nil, errUnavailable
+	default:
 	}
 	sort.Slice(candidates, func(i, j int) bool { return candidates[i].BST > candidates[j].BST })
 	candidates = candidates[:(len(candidates)+1)/2]

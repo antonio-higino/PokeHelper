@@ -1,79 +1,78 @@
 package com.example.adapters.services
 
-import com.example.adapters.http.ResourceNotFoundException
-import com.example.adapters.http.InvalidRequestException
+import com.example.domain.InvalidPokemonRequest
+import com.example.domain.PokemonNotFound
+import com.example.domain.PokemonServiceUnavailable
+import com.example.domain.PokemonServices
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.google.protobuf.Empty
+import com.google.protobuf.Struct
+import com.google.protobuf.util.JsonFormat
+import com.pokehelper.contract.v1.Document
+import com.pokehelper.contract.v1.LookupRequest
+import com.pokehelper.contract.v1.PokemonCatalogGrpc
+import com.pokehelper.contract.v1.RecommendationRequest
+import com.pokehelper.contract.v1.RecommendationsGrpc
+import com.pokehelper.contract.v1.TeamRequest
+import io.grpc.ManagedChannel
+import io.grpc.ManagedChannelBuilder
+import io.grpc.Status
+import io.grpc.StatusRuntimeException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.net.URI
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
-import java.time.Duration
+import java.util.concurrent.TimeUnit
 
-class DownstreamServiceException(message: String) : RuntimeException(message)
-
+/** Channels connect lazily: the API can start and keep serving without Go. */
 class PokeServicesClient(
-    pokemonServiceUrl: String,
-    recommendationServiceUrl: String,
-    private val http: HttpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build(),
+    private val catalogChannel: ManagedChannel,
+    private val recommendationChannel: ManagedChannel,
+    private val timeoutMillis: Long = 2_000,
     private val json: ObjectMapper = ObjectMapper()
-) {
-    private val pokemonBaseUrl = pokemonServiceUrl.trimEnd('/')
-    private val recommendationBaseUrl = recommendationServiceUrl.trimEnd('/')
-
-    suspend fun pokemon(identifier: String): JsonNode = get(pokemonBaseUrl, "/pokemon/${identifier.safePathSegment()}")
-
-    suspend fun types(): JsonNode = get(pokemonBaseUrl, "/types")
-
-    suspend fun type(name: String): JsonNode = get(pokemonBaseUrl, "/types/${name.safePathSegment()}")
-
-    suspend fun analyze(body: JsonNode): JsonNode = post(recommendationBaseUrl, "/recommendations", body)
-
-    suspend fun recommendPokemon(body: JsonNode): JsonNode =
-        post(recommendationBaseUrl, "/recommendations/pokemon", body)
-
-    private suspend fun get(baseUrl: String, path: String): JsonNode = request(
-        HttpRequest.newBuilder(URI.create(baseUrl + path)).GET().build()
+) : PokemonServices, AutoCloseable {
+    constructor(pokemonTarget: String, recommendationTarget: String, timeoutMillis: Long = 2_000) : this(
+        ManagedChannelBuilder.forTarget(pokemonTarget).usePlaintext().build(),
+        ManagedChannelBuilder.forTarget(recommendationTarget).usePlaintext().build(),
+        timeoutMillis
     )
 
-    private suspend fun post(baseUrl: String, path: String, body: JsonNode): JsonNode = request(
-        HttpRequest.newBuilder(URI.create(baseUrl + path))
-            .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body)))
-            .build()
-    )
+    init { require(timeoutMillis > 0) { "gRPC timeout must be positive" } }
+    private fun catalog() = PokemonCatalogGrpc.newBlockingStub(catalogChannel)
+        .withDeadlineAfter(timeoutMillis, TimeUnit.MILLISECONDS)
+    private fun recommendations() = RecommendationsGrpc.newBlockingStub(recommendationChannel)
+        .withDeadlineAfter(timeoutMillis, TimeUnit.MILLISECONDS)
 
-    private suspend fun request(request: HttpRequest): JsonNode = withContext(Dispatchers.IO) {
-        val response = try {
-            http.send(request, HttpResponse.BodyHandlers.ofString())
-        } catch (_: Exception) {
-            throw DownstreamServiceException("A required Pokémon service is unavailable")
-        }
-        when (response.statusCode()) {
-            in 200..299 -> try {
-                json.readTree(response.body())
-            } catch (_: Exception) {
-                throw DownstreamServiceException("A Pokémon service returned invalid JSON")
+    override suspend fun pokemon(identifier: String): JsonNode = request { catalog().getPokemon(lookup(identifier)) }
+    override suspend fun types(): JsonNode = request { catalog().listTypes(Empty.getDefaultInstance()) }
+    override suspend fun type(name: String): JsonNode = request { catalog().getType(lookup(name)) }
+    override suspend fun analyze(body: JsonNode): JsonNode = request {
+        recommendations().analyzeTeam(TeamRequest.newBuilder().addAllPokemons(team(body)).build())
+    }
+    override suspend fun recommendPokemon(body: JsonNode): JsonNode = request {
+        recommendations().recommendPokemon(RecommendationRequest.newBuilder()
+            .addAllPokemons(team(body)).setType(body.path("type").asText()).build())
+    }
+
+    private fun lookup(identifier: String) = LookupRequest.newBuilder().setIdentifier(identifier).build()
+    private fun team(body: JsonNode): List<Struct> = body.path("pokemons").map {
+        Struct.newBuilder().also { builder -> JsonFormat.parser().merge(json.writeValueAsString(it), builder) }.build()
+    }
+
+    private suspend fun request(call: () -> Document): JsonNode = withContext(Dispatchers.IO) {
+        val response = try { call() } catch (error: StatusRuntimeException) {
+            when (error.status.code) {
+                Status.Code.INVALID_ARGUMENT -> throw InvalidPokemonRequest(error.status.description ?: "Invalid Pokémon request")
+                Status.Code.NOT_FOUND -> throw PokemonNotFound("Pokémon resource not found")
+                // Fail only this operation; the rest of the API continues serving.
+                else -> throw PokemonServiceUnavailable("A required Pokémon service is unavailable")
             }
-            400 -> throw InvalidRequestException(downstreamMessage(response.body(), "Invalid Pokémon request"))
-            404 -> throw ResourceNotFoundException(downstreamMessage(response.body(), "Pokémon resource not found"))
-            else -> throw DownstreamServiceException("A required Pokémon service failed")
         }
+        if (!response.hasData()) throw PokemonServiceUnavailable("A Pokémon service returned an empty document")
+        json.readTree(JsonFormat.printer().print(response.data))
     }
 
-    private fun downstreamMessage(body: String, fallback: String): String = try {
-        json.readTree(body)?.get("error")?.takeIf { it.isTextual }?.textValue() ?: fallback
-    } catch (_: Exception) {
-        fallback
+    override fun close() {
+        catalogChannel.shutdownNow()
+        recommendationChannel.shutdownNow()
     }
-}
-
-private fun String.safePathSegment(): String {
-    val normalized = lowercase()
-    if (!normalized.matches(Regex("[a-z0-9-]+"))) {
-        throw InvalidRequestException("Pokémon identifier must contain only letters, numbers or hyphens")
-    }
-    return normalized
 }

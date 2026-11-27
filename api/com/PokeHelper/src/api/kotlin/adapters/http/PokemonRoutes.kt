@@ -1,6 +1,6 @@
 package com.example.adapters.http
 
-import com.example.adapters.services.PokeServicesClient
+import com.example.domain.PokemonServices
 import com.fasterxml.jackson.databind.JsonNode
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -27,7 +27,7 @@ data class PokemonRecommendationRequest(
 )
 
 @OptIn(ExperimentalKtorApi::class)
-fun Route.pokemonRoutes(services: PokeServicesClient) {
+fun Route.pokemonRoutes(services: PokemonServices) {
     route("/pokemon") {
         get("/types") {
             call.respond(services.types())
@@ -73,7 +73,7 @@ fun Route.pokemonRoutes(services: PokeServicesClient) {
 }
 
 @OptIn(ExperimentalKtorApi::class)
-fun Route.recommendationRoutes(services: PokeServicesClient) {
+fun Route.recommendationRoutes(services: PokemonServices) {
     route("/recommendations") {
         post {
             val body = call.jsonObject()

@@ -19,11 +19,11 @@ Como rodar:
    Ou use `mise run up`. A API fica em `http://localhost:8080`. O PostgreSQL usa a porta `5432` por padrão, ou `POSTGRES_HOST_PORT` quando definida no `.env` (por exemplo, `5433`).
 4. Para encerrar os serviços, execute `docker compose down`.
 
-O Compose também inicia os serviços `pokemon-api` (porta `8081`) e `recommendation` (porta `8082`). A API Kotlin conversa com ambos pela rede interna do Compose; o frontend usa apenas a API Kotlin na porta `8080`.
+O Compose também inicia `pokemon-api` (HTTP `8081`, gRPC `50051`) e `recommendation` (HTTP `8082`, gRPC `50052`). A API Kotlin conversa com ambos por gRPC; o frontend usa a API HTTP na porta `8080`. Os endpoints HTTP Go continuam disponíveis para compatibilidade e para a comunicação entre recomendação e catálogo.
 
 As configurações do banco podem ser sobrescritas pelas variáveis `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` e `POSTGRES_HOST_PORT` (porta publicada no host). Os valores padrão são destinados apenas ao desenvolvimento local. O Flyway aplica as migrações de `com/PokeHelper/src/api/resources/db/migration` quando a API inicia.
 
-O código do serviço Ktor fica em `com/PokeHelper/src/api/`. As pastas `com/PokeHelper/src/services/` e `com/PokeHelper/src/protos/` ficam reservadas, respectivamente, ao microsserviço Go e aos contratos compartilhados entre serviços.
+O código Ktor fica em `com/PokeHelper/src/api/`. Os serviços Go ficam em `../pokemonApiService/` e `../recomendationService/`, os contratos em `../protos/` e os stubs Go compartilhados em `../rpc/`.
 
 ## API de usuários
 
@@ -103,3 +103,73 @@ A especificação é gerada das rotas e das descrições `describe` do Ktor quan
 
 - Sprint 0: https://youtu.be/wUd9-fjZmRQ
 - Sprint 1: https://youtu.be/u50RZ6qEORU
+
+## gRPC (T5/T6)
+
+O contrato está em `../protos/pokehelper/v1/services.proto`. `PokemonCatalog` expõe
+`GetPokemon`, `GetSpecies`, `GetType` e `ListTypes`; `Recommendations` expõe
+`AnalyzeTeam` e `RecommendPokemon`. Os documentos usam `google.protobuf.Struct`
+para preservar os campos abertos da PokéAPI e os formatos JSON já publicados.
+O domínio Go não depende dos tipos protobuf; os adaptadores fazem a conversão.
+
+O Gradle gera automaticamente os stubs Java a partir de `../protos/` com
+`com.google.protobuf`. Os stubs Go são versionados: após alterar o contrato,
+instale Go e protoc 33.5 e execute `powershell -ExecutionPolicy Bypass -File ../scripts/generate-go.ps1`.
+O script fixa as versões dos plugins. As imagens Docker usam a raiz do repositório
+como contexto; execute `docker compose up --build` nesta pasta.
+
+A porta `PokemonServices` pertence ao domínio Kotlin e não importa gRPC nem os
+contratos gerados. O adaptador usa canais reutilizáveis e conexão sob demanda,
+com prazo de **2 segundos por chamada**. Configure `POKEMON_GRPC_TIMEOUT_MS`,
+`POKEMON_GRPC_TARGET` e `RECOMMENDATION_GRPC_TARGET` para execução local.
+No Compose, os destinos são `pokemon-api:50051` e `recommendation:50052`.
+
+`INVALID_ARGUMENT` vira HTTP 400 e `NOT_FOUND` vira 404. `UNAVAILABLE`,
+`DEADLINE_EXCEEDED` e outras falhas remotas viram 502 com Problem Details.
+A falha afeta a operação solicitada; as demais rotas continuam atendendo.
+A API depende apenas do PostgreSQL para iniciar. Não há retry automático:
+o prazo informado vale para uma única tentativa. Os canais são encerrados
+quando a aplicação para.
+
+Os servidores registram health check padrão (`SERVING`, global e por serviço)
+e reflection. SIGTERM/SIGINT inicia `GracefulStop`; após 5 segundos, chamadas
+pendentes são interrompidas para concluir o encerramento. `GRPC_PORT` altera a
+porta de cada servidor Go. O contexto gRPC é propagado às consultas HTTP externas.
+
+Com `grpcurl` instalado e os serviços no ar, execute na raiz do repositório:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ./scripts/grpc-smoke.ps1
+```
+
+O script lista os serviços por reflection, exige health `SERVING`, busca Pikachu
+e analisa um time. As chamadas dependem da disponibilidade da PokéAPI.
+Para conferir manualmente:
+
+```shell
+grpcurl -plaintext localhost:50051 list
+grpcurl -plaintext localhost:50052 list
+grpcurl -plaintext -d '{}' localhost:50051 grpc.health.v1.Health/Check
+```
+
+`../requests/grpc-flow.http` contém as chamadas HTTP do fluxo. Para testar falha,
+execute `docker compose stop pokemon-api recommendation`: `/pokemon/pikachu`
+deve retornar 502 dentro do prazo e `/` deve continuar retornando 200.
+Para testar a inicialização independente, mantenha o Go parado e execute
+`docker compose up -d --no-deps app`. Restaure com
+`docker compose up -d --wait pokemon-api recommendation`.
+
+Validação automatizada:
+
+```shell
+go -C ../rpc test ./...
+go -C ../pokemonApiService test ./...
+go -C ../recomendationService test ./...
+mise exec -- gradle test
+```
+
+Os testes Go usam `bufconn` e conferem serviço, health, reflection, erros e
+cancelamento da consulta externa. `GrpcServicesTest` usa servidores gRPC em
+memória para conferir ambas as integrações, prazos, códigos e o fluxo HTTP com
+dependência lenta ou parada. `ArchitectureTest` proíbe `io.grpc`, protobuf,
+o pacote gerado e adaptadores no domínio e nos casos de uso.

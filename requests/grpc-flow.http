@@ -1,0 +1,20 @@
+### API remains available even when the Go services are stopped.
+GET http://localhost:8080/
+
+### With Go serving: 200. With catalog stopped: 502 within the configured deadline.
+GET http://localhost:8080/pokemon/pikachu
+
+### Domain validation / not found
+GET http://localhost:8080/pokemon/pokemon-that-does-not-exist
+
+### With Go serving: defensive coverage and recommended types.
+POST http://localhost:8080/recommendations
+Content-Type: application/json
+
+{"pokemons":[{"id":25,"name":"pikachu","types":[{"type":{"name":"electric"}}]}]}
+
+### Candidates
+POST http://localhost:8080/recommendations/pokemon
+Content-Type: application/json
+
+{"type":"flying","pokemons":[{"id":25,"name":"pikachu","types":[{"type":{"name":"electric"}}]}]}

@@ -1,7 +1,8 @@
-
+import com.google.protobuf.gradle.*
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(ktorLibs.plugins.ktor)
+    id("com.google.protobuf") version "0.9.5"
 }
 
 group = "com.example"
@@ -15,6 +16,13 @@ kotlin {
     jvmToolchain(21)
 }
 dependencies {
+    implementation("io.grpc:grpc-netty-shaded:1.79.0")
+    implementation("io.grpc:grpc-protobuf:1.79.0")
+    implementation("io.grpc:grpc-stub:1.79.0")
+    implementation("com.google.protobuf:protobuf-java-util:4.33.5")
+    compileOnly("javax.annotation:javax.annotation-api:1.3.2")
+    testImplementation("io.grpc:grpc-inprocess:1.79.0")
+    testImplementation("com.tngtech.archunit:archunit:1.4.1")
     implementation(ktorLibs.server.config.yaml)
     implementation(ktorLibs.server.core)
     implementation(ktorLibs.server.netty)
@@ -44,4 +52,11 @@ kotlin.sourceSets.named("test") {
 
 sourceSets.main {
     resources.srcDir("com/PokeHelper/src/api/resources")
+    proto.srcDir("../protos")
+}
+
+protobuf {
+    protoc { artifact = "com.google.protobuf:protoc:4.33.5" }
+    plugins { id("grpc") { artifact = "io.grpc:protoc-gen-grpc-java:1.79.0" } }
+    generateProtoTasks { all().configureEach { plugins { id("grpc") } } }
 }

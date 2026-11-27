@@ -104,7 +104,7 @@ class ProblemDetailsTest {
     }
 }
 
-internal fun io.ktor.server.application.Application.configureTestApi() {
+internal fun io.ktor.server.application.Application.configureTestApi(pokeServices: com.example.domain.PokemonServices? = null) {
     val users = object : UserRepository {
         override suspend fun list(page: Int, size: Int, username: String?) = Page(emptyList<User>(), page, size, 0)
         override suspend fun findById(id: Long): User? = null
@@ -128,6 +128,8 @@ internal fun io.ktor.server.application.Application.configureTestApi() {
     configureProblemDetails()
     configureRouting(
         UserService(users, teams), TeamService(teams, users),
-        PokeServicesClient("http://localhost:18081", "http://localhost:18082")
+        pokeServices ?: PokeServicesClient("localhost:18081", "localhost:18082").also { adapter ->
+            monitor.subscribe(io.ktor.server.application.ApplicationStopped) { adapter.close() }
+        }
     )
 }

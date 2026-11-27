@@ -4,11 +4,11 @@ gradle = "9.5.1"
 
 [tasks.build]
 description = "Compila os microsserviços Go e gera o artefato Kotlin"
-run = ["go -C ../pokemonApiService test ./...", "go -C ../recomendationService test ./...", "gradle build -x test"]
+run = ["go -C ../rpc test ./...", "go -C ../pokemonApiService test ./...", "go -C ../recomendationService test ./...", "gradle build -x test"]
 
 [tasks.test]
 description = "Sobe as dependências e executa as suítes Go e Kotlin"
-run = ["docker compose up -d --wait db", "go -C ../pokemonApiService test ./...", "go -C ../recomendationService test ./...", "gradle test"]
+run = ["docker compose up -d --wait db", "go -C ../rpc test ./...", "go -C ../pokemonApiService test ./...", "go -C ../recomendationService test ./...", "gradle test"]
 
 [tasks.up]
 description = "Sobe a API e o PostgreSQL com Docker Compose"

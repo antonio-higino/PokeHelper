@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package pokehelper.v1;
+option go_package = "github.com/antonio-higino/pokehelper/rpc/gen/pokehelper/v1;pokehelperv1";
+option java_package = "com.pokehelper.contract.v1";
+option java_multiple_files = true;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/struct.proto";
+
+message LookupRequest { string identifier = 1; }
+
+// PokeAPI documents are deliberately open: preserve additional fields, including
+// sprites, rather than coupling the API to a particular PokeAPI schema revision.
+message Document { google.protobuf.Struct data = 1; }
+message TeamRequest { repeated google.protobuf.Struct pokemons = 1; }
+message RecommendationRequest {
+  repeated google.protobuf.Struct pokemons = 1;
+  string type = 2;
+}
+
+service PokemonCatalog {
+  rpc GetPokemon(LookupRequest) returns (Document);
+  rpc GetSpecies(LookupRequest) returns (Document);
+  rpc GetType(LookupRequest) returns (Document);
+  rpc ListTypes(google.protobuf.Empty) returns (Document);
+}
+
+service Recommendations {
+  rpc AnalyzeTeam(TeamRequest) returns (Document);
+  rpc RecommendPokemon(RecommendationRequest) returns (Document);
+}

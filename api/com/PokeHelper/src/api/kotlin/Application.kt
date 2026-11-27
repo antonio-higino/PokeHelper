@@ -33,9 +33,11 @@ fun Application.module() {
     val userRepository: UserRepository = ExposedUserRepository(database)
     val teamRepository: TeamRepository = ExposedTeamRepository(database)
     val pokeServices = PokeServicesClient(
-        pokemonServiceUrl = System.getenv("POKEMON_API_SERVICE_URL") ?: "http://localhost:8081",
-        recommendationServiceUrl = System.getenv("RECOMMENDATION_SERVICE_URL") ?: "http://localhost:8082"
+        pokemonTarget = System.getenv("POKEMON_GRPC_TARGET") ?: "localhost:50051",
+        recommendationTarget = System.getenv("RECOMMENDATION_GRPC_TARGET") ?: "localhost:50052",
+        timeoutMillis = System.getenv("POKEMON_GRPC_TIMEOUT_MS")?.toLong() ?: 2_000
     )
+    monitor.subscribe(ApplicationStopped) { pokeServices.close() }
 
     install(ContentNegotiation) {
         jackson()

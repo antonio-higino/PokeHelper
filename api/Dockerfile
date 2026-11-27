@@ -1,6 +1,7 @@
 FROM gradle:9.5.1-jdk21 AS build
 WORKDIR /app
-COPY . .
+COPY api/ .
+COPY protos/ /protos/
 RUN gradle installDist
 
 FROM eclipse-temurin:21-jre
