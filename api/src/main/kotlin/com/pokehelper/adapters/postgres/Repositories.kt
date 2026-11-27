@@ -1,13 +1,13 @@
-package com.example.adapters.postgres
+package com.pokehelper.adapters.postgres
 
-import com.example.domain.Team
-import com.example.domain.TeamRepository
-import com.example.domain.User
-import com.example.domain.UserRepository
-import com.example.domain.Page
-import com.example.domain.UsernameAlreadyExists
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.ObjectMapper
+import com.pokehelper.domain.Team
+import com.pokehelper.domain.TeamRepository
+import com.pokehelper.domain.User
+import com.pokehelper.domain.UserRepository
+import com.pokehelper.adapters.json.PokemonJson
+import com.pokehelper.domain.Page
+import com.pokehelper.domain.Pokemon
+import com.pokehelper.domain.UsernameAlreadyExists
 import kotlinx.coroutines.Dispatchers
 import org.jetbrains.exposed.dao.id.LongIdTable
 import org.jetbrains.exposed.sql.Database
@@ -33,8 +33,6 @@ internal object TeamsTable : LongIdTable("teams") {
     val pokemons = text("pokemons")
 }
 
-private val json = ObjectMapper()
-
 private fun ResultRow.toUser() = User(
     id = this[UsersTable.id].value,
     username = this[UsersTable.username],
@@ -45,7 +43,7 @@ private fun ResultRow.toTeam() = Team(
     id = this[TeamsTable.id].value,
     name = this[TeamsTable.name],
     userId = this[TeamsTable.userId],
-    pokemons = json.readTree(this[TeamsTable.pokemons]).toList()
+    pokemons = PokemonJson.readList(this[TeamsTable.pokemons])
 )
 
 class ExposedUserRepository(private val database: Database) : UserRepository {
@@ -140,8 +138,8 @@ class ExposedTeamRepository(private val database: Database) : TeamRepository {
             .map(ResultRow::toTeam)
     }
 
-    override suspend fun create(name: String, userId: Long, pokemons: List<JsonNode>): Team = newSuspendedTransaction(Dispatchers.IO, db = database) {
-        val serializedPokemons = json.writeValueAsString(pokemons)
+    override suspend fun create(name: String, userId: Long, pokemons: List<Pokemon>): Team = newSuspendedTransaction(Dispatchers.IO, db = database) {
+        val serializedPokemons = PokemonJson.writeList(pokemons)
         val id = TeamsTable.insertAndGetId {
             it[TeamsTable.name] = name
             it[TeamsTable.userId] = userId
@@ -154,7 +152,7 @@ class ExposedTeamRepository(private val database: Database) : TeamRepository {
         val updated = TeamsTable.update({ TeamsTable.id eq team.id }) {
             it[name] = team.name
             it[userId] = team.userId
-            it[pokemons] = json.writeValueAsString(team.pokemons)
+            it[pokemons] = PokemonJson.writeList(team.pokemons)
         }
         if (updated == 0) null else team
     }

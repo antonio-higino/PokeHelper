@@ -1,4 +1,4 @@
-package com.example.adapters.http
+package com.pokehelper.adapters.http
 
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode

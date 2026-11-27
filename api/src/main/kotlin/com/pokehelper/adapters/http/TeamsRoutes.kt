@@ -1,7 +1,8 @@
-package com.example.adapters.http
+package com.pokehelper.adapters.http
 
-import com.example.domain.Team
-import com.example.usecases.TeamService
+import com.pokehelper.adapters.json.PokemonJson
+import com.pokehelper.domain.Team
+import com.pokehelper.usecases.TeamService
 import com.fasterxml.jackson.databind.JsonNode
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -44,7 +45,7 @@ data class TeamResponse(
 )
 data class TeamPageResponse(val items: List<TeamResponse>, val page: Int, val size: Int, val total: Long)
 
-internal fun Team.toResponse() = TeamResponse(id, name, userId, pokemons)
+internal fun Team.toResponse() = TeamResponse(id, name, userId, pokemons.map(PokemonJson::toNode))
 
 @OptIn(ExperimentalKtorApi::class)
 fun Route.teamRoutes(service: TeamService) {
@@ -81,7 +82,7 @@ fun Route.teamRoutes(service: TeamService) {
                 body.requiredString("name"), body.requiredPositiveLong("userId"), body.requiredArray("pokemons")
             )
             val team = service.create(
-                request.name, request.userId, request.pokemons
+                request.name, request.userId, request.pokemons.map(PokemonJson::fromNode)
             ) ?: throw ResourceNotFoundException("User not found")
             call.response.headers.append(HttpHeaders.Location, "/teams/${team.id}")
             call.respond(HttpStatusCode.Created, team.toResponse())
@@ -118,7 +119,7 @@ fun Route.teamRoutes(service: TeamService) {
                 val id = call.pathId()
                 val body = call.jsonObject()
                 val request = TeamUpdateRequest(body.requiredString("name"), body.requiredArray("pokemons"))
-                val team = service.update(id, request.name, request.pokemons)
+                val team = service.update(id, request.name, request.pokemons.map(PokemonJson::fromNode))
                     ?: throw ResourceNotFoundException("Team not found")
                 call.respond(team.toResponse())
             }.describe {

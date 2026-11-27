@@ -1,4 +1,4 @@
-package com.example.adapters.http
+package com.pokehelper.adapters.http
 
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.JsonNode

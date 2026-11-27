@@ -1,8 +1,8 @@
-package com.example.adapters.http
+package com.pokehelper.adapters.http
 
-import com.example.domain.Team
-import com.example.domain.User
-import com.example.usecases.UserService
+import com.pokehelper.domain.Team
+import com.pokehelper.domain.User
+import com.pokehelper.usecases.UserService
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.openapi.JsonSchema

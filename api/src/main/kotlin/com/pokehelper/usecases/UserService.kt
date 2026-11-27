@@ -1,10 +1,10 @@
-package com.example.usecases
+package com.pokehelper.usecases
 
-import com.example.domain.Page
-import com.example.domain.Team
-import com.example.domain.TeamRepository
-import com.example.domain.User
-import com.example.domain.UserRepository
+import com.pokehelper.domain.Page
+import com.pokehelper.domain.Team
+import com.pokehelper.domain.TeamRepository
+import com.pokehelper.domain.User
+import com.pokehelper.domain.UserRepository
 
 class UserService(
     private val users: UserRepository,

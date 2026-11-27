@@ -1,0 +1,19 @@
+ktor:
+  deployment:
+    port: "$PORT:8080"
+  application:
+    modules:
+      - com.pokehelper.ApplicationKt.module
+
+database:
+  url: "$DATABASE_URL:jdbc:postgresql://localhost:5432/app_db"
+  user: "$DATABASE_USER:admin"
+  password: "$DATABASE_PASSWORD:admin"
+
+recommendation:
+  target: "$?RECOMMENDATION_TARGET"
+  timeoutMs: "$RECOMMENDATION_TIMEOUT_MS:15000"
+
+catalog:
+  url: "$?POKEMON_API_SERVICE_URL"
+  timeoutMs: "$POKEMON_API_TIMEOUT_MS:10000"
