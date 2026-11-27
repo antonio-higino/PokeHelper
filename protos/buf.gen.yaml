@@ -1,0 +1,16 @@
+version: v2
+managed:
+  enabled: true
+  disable:
+    - file_option: java_package
+    - file_option: java_multiple_files
+  override:
+    - file_option: go_package_prefix
+      value: github.com/antonio-higino/pokehelper/recommendation-service/gen
+plugins:
+  - remote: buf.build/protocolbuffers/go
+    out: ../recomendationService/gen
+    opt: paths=source_relative
+  - remote: buf.build/grpc/go
+    out: ../recomendationService/gen
+    opt: paths=source_relative

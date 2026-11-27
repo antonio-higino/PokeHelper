@@ -1,0 +1,98 @@
+syntax = "proto3";
+
+package pokehelper.recommendation.v1;
+
+option java_multiple_files = true;
+option java_package = "com.pokehelper.grpc.recommendation.v1";
+
+// Análise defensiva de times e recomendação de Pokémon.
+service RecommendationService {
+  // Calcula a cobertura defensiva do time e os tipos que mais reduzem suas fraquezas.
+  // INVALID_ARGUMENT: time vazio, com mais de seis Pokémon ou com Pokémon repetido.
+  // UNAVAILABLE: o catálogo de Pokémon não respondeu.
+  rpc AnalyzeTeam(AnalyzeTeamRequest) returns (AnalyzeTeamResponse);
+  // Sugere Pokémon de um tipo que complementam o time.
+  // INVALID_ARGUMENT: time inválido ou tipo desconhecido.
+  // UNAVAILABLE: o catálogo de Pokémon não respondeu.
+  rpc RecommendPokemon(RecommendPokemonRequest) returns (RecommendPokemonResponse);
+}
+
+// Pokémon do time.
+message TeamMember {
+  // ID na PokéAPI, positivo.
+  int32 id = 1;
+  // Nome na PokéAPI, em minúsculas.
+  string name = 2;
+  // Tipos em minúsculas, na ordem dos slots (um ou dois).
+  repeated string types = 3;
+}
+
+// Entrada de AnalyzeTeam.
+message AnalyzeTeamRequest {
+  // Pokémon do time, de um a seis.
+  repeated TeamMember members = 1;
+}
+
+// Quantos membros do time recebem cada faixa de dano de um tipo atacante.
+message TypeCoverage {
+  // Tipo atacante.
+  string attacking_type = 1;
+  // Membros imunes (x0).
+  int32 immune = 2;
+  // Membros muito resistentes (x0,25 ou menos).
+  int32 very_resistant = 3;
+  // Membros resistentes (x0,5).
+  int32 resistant = 4;
+  // Membros com dano neutro (x1).
+  int32 neutral = 5;
+  // Membros fracos (x2).
+  int32 weak = 6;
+  // Membros muito fracos (x4 ou mais).
+  int32 very_weak = 7;
+}
+
+// Tipo recomendado e sua pontuação.
+message TypeRecommendation {
+  // Tipo recomendado.
+  string type = 1;
+  // Pontuação: quanto maior, mais o tipo cobre as fraquezas do time.
+  int32 score = 2;
+}
+
+// Saída de AnalyzeTeam.
+message AnalyzeTeamResponse {
+  // Cobertura para cada tipo atacante do jogo.
+  repeated TypeCoverage coverage = 1;
+  // Até cinco tipos recomendados, da maior para a menor pontuação.
+  repeated TypeRecommendation recommended_types = 2;
+}
+
+// Entrada de RecommendPokemon.
+message RecommendPokemonRequest {
+  // Pokémon do time, de um a seis.
+  repeated TeamMember members = 1;
+  // Tipo dos Pokémon sugeridos, em minúsculas.
+  string type = 2;
+}
+
+// Pokémon sugerido para o time.
+message PokemonCandidate {
+  // ID na PokéAPI.
+  int32 id = 1;
+  // Nome na PokéAPI.
+  string name = 2;
+  // Tipos, na ordem dos slots.
+  repeated string types = 3;
+  // Soma dos status base.
+  int32 base_stat_total = 4;
+  // Posição da combinação de tipos do candidato no ranking defensivo (0 é a melhor).
+  int32 combination_rank = 5;
+  // URL do sprite frontal; vazia quando não existe.
+  string sprite_url = 6;
+}
+
+// Saída de RecommendPokemon.
+message RecommendPokemonResponse {
+  // Candidatos, do mais para o menos indicado.
+  repeated PokemonCandidate candidates = 1;
+}
